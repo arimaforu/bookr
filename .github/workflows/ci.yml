@@ -319,28 +319,27 @@ jobs:
 #########################
   macos-self-hosted:
     name: macOS (self-hosted, arm64)
-    if: ${{ secrets.SELF_HOSTED_ENABLED == 'true' }}
     runs-on: [self-hosted, macos, arm64]
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+
       - name: Install deps (self-hosted)
         run: |
           brew update
           brew install cmake pandoc poppler ccache || true
+
       - name: Configure (arm64)
         run: |
-          cmake -S . -B $BUILD_DIR \
+          cmake -S . -B build \
             -DCMAKE_BUILD_TYPE=Release \
             -DBOOKR_ENABLE_WARNINGS=ON \
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
       - name: Build
-        run: cmake --build $BUILD_DIR -- -j
+        run: cmake --build build -- -j
+
       - name: Test
-        run: $BUILD_DIR/bookr --version
-      - name: Upload artifact (self-hosted)
-        uses: actions/upload-artifact@v4
-        with:
-          name: bookr-macos-arm64
-          path: ${{ env.BUILD_DIR }}/bookr
+        run: build/bookr --version/bookr
