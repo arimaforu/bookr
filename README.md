@@ -53,6 +53,32 @@ brew install pandoc poppler
 sudo pacman -S pandoc poppler
 ```
 
+### Install (Debian)
+
+```bash
+sudo apt update
+sudo apt install pandoc poppler-utils
+```
+
+### Install (Fedora)
+
+```bash
+sudo dnf install pandoc poppler-utils
+```
+
+### Install (NixOS)
+
+```bash
+nix-shell -p pandoc poppler
+```
+
+### Install (FreeBSD)
+
+```bash
+sudo pkg update
+sudo pkg install pandoc poppler
+```
+
 ### Build
 
 ```bash
