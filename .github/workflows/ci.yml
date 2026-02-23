@@ -1,0 +1,346 @@
+# .github/workflows/ci.yml
+name: CI
+
+# Триггеры: push в main/master, PR, ручной запуск
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  BUILD_DIR: build
+  CCACHE_DIR: ~/.ccache
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+#########################
+# Matrix build: Ubuntu / macOS (universal)
+#########################
+jobs:
+  build-matrix:
+    name: Build ${{ matrix.os }} / ${{ matrix.compiler }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            compiler: gcc
+          - os: ubuntu-latest
+            compiler: clang
+          - os: macos-latest
+            compiler: clang
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ runner.os }}-ccache-${{ matrix.compiler }}-${{ hashFiles('**/CMakeLists.txt', '**/src/**') }}
+          restore-keys: |
+            ${{ runner.os }}-ccache-${{ matrix.compiler }}-
+
+      - name: Install deps (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake build-essential pkg-config ccache pandoc poppler-utils ca-certificates
+
+      - name: Install deps (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew update
+          brew install cmake pandoc poppler ccache || true
+
+      - name: Select compiler env
+        run: |
+          if [ "${{ matrix.compiler }}" = "gcc" ]; then
+            echo "CC=gcc" >> $GITHUB_ENV
+            echo "CXX=g++" >> $GITHUB_ENV
+          else
+            echo "CC=clang" >> $GITHUB_ENV
+            echo "CXX=clang++" >> $GITHUB_ENV
+          fi
+
+      - name: Print runner info
+        run: |
+          uname -a || true
+          uname -m || true
+          sw_vers 2>/dev/null || true
+          lsb_release -a 2>/dev/null || true
+
+      - name: Configure (CMake)
+        env:
+          CC: ${{ env.CC }}
+          CXX: ${{ env.CXX }}
+          CCACHE_DIR: ${{ env.CCACHE_DIR }}
+        run: |
+          # On macOS produce a universal binary (arm64 + x86_64).
+          if [ "${{ matrix.os }}" = "macos-latest" ]; then
+            cmake -S . -B $BUILD_DIR \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DBOOKR_ENABLE_WARNINGS=ON \
+              -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
+              -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+              -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          else
+            cmake -S . -B $BUILD_DIR \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DBOOKR_ENABLE_WARNINGS=ON \
+              -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+              -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          fi
+
+      - name: Build
+        run: cmake --build $BUILD_DIR -- -j
+
+      - name: Smoke test (run --version)
+        run: |
+          if [ -x $BUILD_DIR/bookr ]; then
+            $BUILD_DIR/bookr --version
+          else
+            echo "Binary not found: $BUILD_DIR/bookr"
+            ls -la $BUILD_DIR || true
+            exit 1
+          fi
+
+      - name: macOS universal verification
+        if: matrix.os == 'macos-latest'
+        run: |
+          echo "Binary info for $BUILD_DIR/bookr"
+          if command -v lipo >/dev/null 2>&1; then
+            lipo -info $BUILD_DIR/bookr || true
+          else
+            file $BUILD_DIR/bookr || true
+          fi
+
+      - name: Upload artifact (main branch only)
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: bookr-${{ matrix.os }}-${{ matrix.compiler }}
+          path: ${{ env.BUILD_DIR }}/bookr
+
+#########################
+# Sanitizers job (Debug + ASan/UBSan) — Ubuntu (clang)
+#########################
+  sanitizers:
+    name: Sanitizers (clang, Debug)
+    runs-on: ubuntu-latest
+    needs: build-matrix
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake clang clang++ build-essential ccache
+
+      - name: Configure (Debug + sanitizers)
+        run: |
+          cmake -S . -B $BUILD_DIR \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DBOOKR_ENABLE_SANITIZERS=ON \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Build (Sanitizers)
+        run: cmake --build $BUILD_DIR -- -j
+
+      - name: Smoke test (sanitizers build)
+        run: |
+          if [ -x $BUILD_DIR/bookr ]; then
+            $BUILD_DIR/bookr --version
+          else
+            echo "Binary not found"
+            exit 1
+          fi
+
+      - name: Upload sanitizers artifact (main branch only)
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: bookr-sanitizers
+          path: ${{ env.BUILD_DIR }}/bookr
+
+#########################
+# Debian (container)
+#########################
+  debian:
+    name: Debian stable (container)
+    runs-on: ubuntu-latest
+    container:
+      image: debian:stable-slim
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install distro deps
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            cmake build-essential ccache pandoc poppler-utils ca-certificates pkg-config
+      - name: Configure & build
+        run: |
+          cmake -S . -B $BUILD_DIR -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          cmake --build $BUILD_DIR -- -j
+      - name: Test
+        run: $BUILD_DIR/bookr --version
+      - name: Upload artifact (main)
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: bookr-debian
+          path: ${{ env.BUILD_DIR }}/bookr
+
+#########################
+# Fedora (container)
+#########################
+  fedora:
+    name: Fedora (container)
+    runs-on: ubuntu-latest
+    container:
+      image: fedora:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install distro deps
+        run: |
+          dnf -y install dnf-plugins-core
+          dnf -y install cmake gcc-c++ make ccache pandoc poppler-utils pkgconfig
+          dnf clean all || true
+      - name: Configure & build
+        run: |
+          cmake -S . -B $BUILD_DIR -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          cmake --build $BUILD_DIR -- -j
+      - name: Test
+        run: $BUILD_DIR/bookr --version
+      - name: Upload artifact (main)
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: bookr-fedora
+          path: ${{ env.BUILD_DIR }}/bookr
+
+#########################
+# Arch Linux (container)
+#########################
+  arch:
+    name: Arch Linux (container)
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup pacman keys & install deps
+        run: |
+          pacman -Sy --noconfirm archlinux-keyring || true
+          pacman-key --init
+          pacman-key --populate archlinux
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm cmake gcc make ccache pandoc poppler pkgconf
+      - name: Configure & build
+        run: |
+          cmake -S . -B $BUILD_DIR -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          cmake --build $BUILD_DIR -- -j
+      - name: Test
+        run: $BUILD_DIR/bookr --version
+      - name: Upload artifact (main)
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: bookr-arch
+          path: ${{ env.BUILD_DIR }}/bookr
+
+#########################
+# Nix (nix-shell)
+#########################
+  nix:
+    name: Nix (nix-shell)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Nix
+        uses: cachix/install-nix-action@v25
+      - name: Build in nix-shell
+        run: |
+          nix-shell -p cmake gcc pandoc poppler ccache --run "
+            cmake -S . -B $BUILD_DIR -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache &&
+            cmake --build $BUILD_DIR -- -j &&
+            $BUILD_DIR/bookr --version
+          "
+      - name: Upload artifact (main)
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: bookr-nix
+          path: ${{ env.BUILD_DIR }}/bookr
+
+#########################
+# FreeBSD (VM action)
+#########################
+  freebsd:
+    name: FreeBSD VM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run FreeBSD VM and build
+        uses: vmactions/freebsd-vm@v1
+        with:
+          prepare: |
+            pkg update -f
+            pkg install -y cmake gcc gmake pandoc poppler
+          run: |
+            mkdir -p build
+            cmake -S . -B build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
+            gmake -C build -j
+            build/bookr --version
+      - name: Upload artifact (main)
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: bookr-freebsd
+          path: ${{ env.BUILD_DIR }}/bookr
+
+#########################
+# Optional: Self-hosted macOS (ARM64)
+# To enable: add repository secret SELF_HOSTED_ENABLED=true
+# and register a self-hosted runner on your M2 Mac (see instructions below).
+#########################
+  macos-self-hosted:
+    name: macOS (self-hosted, arm64)
+    if: ${{ secrets.SELF_HOSTED_ENABLED == 'true' }}
+    runs-on: [self-hosted, macos, arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deps (self-hosted)
+        run: |
+          brew update
+          brew install cmake pandoc poppler ccache || true
+      - name: Configure (arm64)
+        run: |
+          cmake -S . -B $BUILD_DIR \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBOOKR_ENABLE_WARNINGS=ON \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+      - name: Build
+        run: cmake --build $BUILD_DIR -- -j
+      - name: Test
+        run: $BUILD_DIR/bookr --version
+      - name: Upload artifact (self-hosted)
+        uses: actions/upload-artifact@v4
+        with:
+          name: bookr-macos-arm64
+          path: ${{ env.BUILD_DIR }}/bookr
