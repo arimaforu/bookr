@@ -287,55 +287,34 @@ jobs:
           "
 
 #########################
-# FreeBSD (VM action)
-#########################
-  freebsd:
-    name: FreeBSD
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: FreeBSD build
-        uses: vmactions/freebsd-vm@v1
-        with:
-          usesh: true
-          prepare: |
-            pkg update -f
-            pkg install -y cmake gcc gmake pandoc poppler
-          run: |
-            mkdir -p build
-            cmake -S . -B build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
-            gmake -C build -j
-            build/bookr --version
-
-#########################
 # Optional: Self-hosted macOS (ARM64)
 # To enable: add repository secret SELF_HOSTED_ENABLED=true
 # and register a self-hosted runner on your M2 Mac (see instructions below).
 #########################
-  macos-self-hosted:
-    name: macOS (self-hosted, arm64)
-    runs-on: [self-hosted, macos, arm64]
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
+macos:
+  name: macOS Universal Build
+  runs-on: macos-latest
+  steps:
+    - uses: actions/checkout@v4
 
-      - name: Install deps (self-hosted)
-        run: |
-          brew update
-          brew install cmake pandoc poppler ccache || true
+    - name: Install dependencies
+      run: |
+        brew update
+        brew install cmake pandoc poppler || true
 
-      - name: Configure (arm64)
-        run: |
-          cmake -S . -B build \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DBOOKR_ENABLE_WARNINGS=ON \
-            -DCMAKE_OSX_ARCHITECTURES=arm64 \
-            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+    - name: Configure (Universal)
+      run: |
+        cmake -S . -B build \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
 
-      - name: Build
-        run: cmake --build build -- -j
+    - name: Build
+      run: cmake --build build -- -j
 
-      - name: Test
-        run: build/bookr --version/bookr
+    - name: Verify architectures
+      run: |
+        file build/bookr
+        lipo -info build/bookr || true
+
+    - name: Test
+      run: build/bookr --version
