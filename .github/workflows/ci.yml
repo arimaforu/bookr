@@ -290,13 +290,15 @@ jobs:
 # FreeBSD (VM action)
 #########################
   freebsd:
-    name: FreeBSD VM
+    name: FreeBSD
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Run FreeBSD VM and build
+
+      - name: FreeBSD build
         uses: vmactions/freebsd-vm@v1
         with:
+          usesh: true
           prepare: |
             pkg update -f
             pkg install -y cmake gcc gmake pandoc poppler
@@ -305,12 +307,6 @@ jobs:
             cmake -S . -B build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
             gmake -C build -j
             build/bookr --version
-      - name: Upload artifact (main)
-        if: github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@v4
-        with:
-          name: bookr-freebsd
-          path: ${{ env.BUILD_DIR }}/bookr
 
 #########################
 # Optional: Self-hosted macOS (ARM64)
