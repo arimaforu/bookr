@@ -1,0 +1,169 @@
+﻿BOOKR HELP / СПРАВКА
+====================
+
+RU
+--
+Bookr — терминальная читалка книг для macOS/Linux.
+Поддерживаемые форматы: txt, fb2, epub, pdf.
+
+1) Зависимости
+- fb2/epub: pandoc
+- pdf: pdftotext (poppler)
+
+Пример (macOS):
+- brew install pandoc poppler
+
+2) Сборка
+- cmake -S . -B build
+- cmake --build build
+
+3) Основные команды
+- ./build/bookr --help
+- ./build/bookr --version
+- ./build/bookr /path/to/book.epub
+
+4) Библиотека папок
+- ./build/bookr --add-folder /path/to/books
+- ./build/bookr --remove-folder /path/to/books
+- ./build/bookr --list-folders
+- ./build/bookr
+
+Команда без аргументов открывает полноэкранный браузер библиотеки.
+
+5) Управление в читалке
+- -> или колесо вниз: следующая страница
+- <- или колесо вверх: предыдущая страница
+- / : поиск по целому слову
+- вниз или ] : следующее совпадение
+- вверх или [ : предыдущее совпадение
+- t : открыть оглавление (epub/fb2: из метаданных, pdf/txt: авто-распознавание)
+- f : показать сноски с текущей страницы
+- c : скопировать текущий абзац в буфер обмена
+- q : выход
+
+6) Управление в браузере библиотеки
+- стрелки: навигация
+- left/right: переключение панели (папки/книги)
+- Enter: открыть книгу
+- s: сортировка книг (name/date)
+- x: удалить выбранную папку из библиотеки
+- r: обновить список
+- q: выход
+
+7) Поиск
+- Ищет только целые слова (учитываются границы слова).
+- Совпадения подсвечиваются на странице.
+- Новый поиск начинается с первого совпадения в книге.
+
+10) Оглавление (TOC)
+- EPUB: используется TOC из метаданных книги (nav/NCX).
+- FB2: используется структура section/title из XML.
+- PDF/TXT: используется эвристическое распознавание заголовков.
+- В меню TOC: up/down/колесо — перемещение, PgUp/PgDn — быстрый шаг, Enter — переход, Esc/q/t — закрыть.
+
+11) Сноски
+- На странице с маркерами вида [1], [2] нажмите f.
+- Откроется список найденных сносок; Enter открывает полный текст выбранной сноски.
+- В просмотре сноски: Esc/q/f — назад, c — копировать текст сноски.
+- EPUB: поддерживаются маркеры [1], [^1], а также надстрочные цифры (например ¹²).
+- FB2: сноски временно недоступны (показывается соответствующее сообщение).
+- PDF/TXT: сноски работают, если строки сносок присутствуют в тексте.
+
+12) Интерфейс
+- Текст отображается в центрированном блоке (ограниченная ширина строки для удобного чтения).
+- Системная информация [ HH:MM | BAT ] показывается только внизу (в правой части нижней полосы).
+- Служебные сообщения (например, переход по TOC) показываются временно и автоматически скрываются через ~3 секунды.
+
+8) Продолжение чтения
+- При повторном открытии книги Bookr предлагает продолжить с последней позиции:
+  Continue from last position? [y/N]
+- y: продолжить, n (или Enter): открыть с начала.
+
+9) Хранение данных
+- Конфиг папок: ~/.config/bookr/folders
+- Позиции чтения: ~/.config/bookr/state
+- Старые файлы (~/.bookr_folders и ~/.bookr_state) мигрируются автоматически.
+
+EN
+--
+Bookr is a terminal book reader for macOS/Linux.
+Supported formats: txt, fb2, epub, pdf.
+
+1) Dependencies
+- fb2/epub: pandoc
+- pdf: pdftotext (poppler)
+
+Example (macOS):
+- brew install pandoc poppler
+
+2) Build
+- cmake -S . -B build
+- cmake --build build
+
+3) Main commands
+- ./build/bookr --help
+- ./build/bookr --version
+- ./build/bookr /path/to/book.epub
+
+4) Folder library
+- ./build/bookr --add-folder /path/to/books
+- ./build/bookr --remove-folder /path/to/books
+- ./build/bookr --list-folders
+- ./build/bookr
+
+Running without arguments opens the fullscreen library browser.
+
+5) Reader controls
+- -> or wheel down: next page
+- <- or wheel up: previous page
+- / : whole-word search
+- down or ] : next match
+- up or [ : previous match
+- t : open table of contents (epub/fb2 from metadata, pdf/txt auto-detected)
+- f : show footnotes for the current page
+- c : copy current paragraph to clipboard
+- q : quit
+
+6) Library browser controls
+- arrows: navigation
+- left/right: switch pane (folders/books)
+- Enter: open selected book
+- s: sort books (name/date)
+- x: remove selected folder from library
+- r: reload library
+- q: quit
+
+7) Search
+- Searches whole words only (word boundaries).
+- Matches are highlighted in text.
+- A new query starts from the first match in the book.
+
+10) Table of contents (TOC)
+- EPUB: TOC is read from book metadata (nav/NCX).
+- FB2: TOC is built from XML section/title structure.
+- PDF/TXT: TOC uses heading auto-detection heuristics.
+- In TOC menu: up/down/wheel to move, PgUp/PgDn for fast step, Enter to jump, Esc/q/t to close.
+
+11) Footnotes
+- On pages with markers like [1], [2], press f.
+- A footnote list opens; Enter opens full selected footnote text.
+- In footnote view: Esc/q/f to go back, c to copy footnote text.
+- EPUB supports markers like [1], [^1], and superscript digits (for example ¹²).
+- FB2 footnotes are temporarily unavailable (an informational message is shown).
+- PDF/TXT footnotes work when note lines are present in the text.
+
+12) Interface
+- Text is rendered in a centered reading column (limited line width).
+- System info [ HH:MM | BAT ] is shown only at the right side of the bottom bar.
+- Status messages (for example TOC jump) are temporary and auto-hide after ~3 seconds.
+
+8) Resume reading
+- On reopening a book, Bookr asks:
+  Continue from last position? [y/N]
+- y: resume, n (or Enter): start from the beginning.
+
+9) Data storage
+- Library folders config: ~/.config/bookr/folders
+- Reading positions: ~/.config/bookr/state
+- Legacy files (~/.bookr_folders and ~/.bookr_state) are migrated automatically.
+
