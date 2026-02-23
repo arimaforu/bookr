@@ -208,6 +208,10 @@ cmake --build build
 - Папки библиотеки: `~/.config/bookr/folders`
 - Позиции чтения: `~/.config/bookr/state`
 
+## Development
+
+This project was developed with assistance from OpenAI Codex.
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
