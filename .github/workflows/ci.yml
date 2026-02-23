@@ -269,22 +269,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Install Nix
         uses: cachix/install-nix-action@v25
+
+      - name: Setup nixpkgs channel
+        run: |
+          nix-channel --add https://nixos.org/channels/nixpkgs-unstable nixpkgs
+          nix-channel --update
+
       - name: Build in nix-shell
         run: |
           nix-shell -p cmake gcc pandoc poppler ccache --run "
-            cmake -S . -B $BUILD_DIR -DCMAKE_BUILD_TYPE=Release \
-              -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache &&
-            cmake --build $BUILD_DIR -- -j &&
-            $BUILD_DIR/bookr --version
+            cmake -S . -B build -DCMAKE_BUILD_TYPE=Release &&
+            cmake --build build -j &&
+            build/bookr --version
           "
-      - name: Upload artifact (main)
-        if: github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@v4
-        with:
-          name: bookr-nix
-          path: ${{ env.BUILD_DIR }}/bookr
 
 #########################
 # FreeBSD (VM action)
